@@ -28,8 +28,8 @@ app.get("/api/diputados", async (req, res) => {
         const result = await pool.query("SELECT * FROM diputados");
         res.json(result.rows);
     } catch (error) {
-        console.error(error);
-        res.status(500).send("Error al obtener diputados");
+        console.error("Error al obtener diputados:", error);
+        res.status(500).json({ error: "Error al obtener diputados" });
     }
 });
 
