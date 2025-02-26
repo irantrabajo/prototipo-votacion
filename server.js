@@ -65,25 +65,47 @@ app.get("/api/sesiones", async (req, res) => {
 });
 
 // 📌 Endpoint para registrar un voto
-app.post("/api/voto", async (req, res) => {
+app.post('/api/voto', async (req, res) => {
     try {
         const { diputado_id, voto, asunto, sesion_id } = req.body;
 
-        if (!diputado_id || !voto || !sesion_id) {
-            return res.status(400).json({ error: "Datos incompletos" });
+        if (!diputado_id || !voto || !asunto || !sesion_id) {
+            return res.status(400).json({ error: 'Datos incompletos' });
         }
 
-        await pool.query(
-            "INSERT INTO votos (diputado_id, voto, asunto, sesion_id) VALUES ($1, $2, $3, $4)",
-            [diputado_id, voto, asunto, sesion_id]
+        // 1️⃣ Buscar si el asunto ya existe en la base de datos
+        let asuntoQuery = await pool.query(
+            'SELECT id FROM asuntos WHERE nombre = $1 AND sesion_id = $2',
+            [asunto, sesion_id]
         );
 
-        res.status(201).json({ message: "Voto registrado exitosamente" });
+        let asunto_id;
+        
+        if (asuntoQuery.rows.length > 0) {
+            // Si el asunto ya existe, usar su id
+            asunto_id = asuntoQuery.rows[0].id;
+        } else {
+            // Si no existe, crearlo y obtener su id
+            const newAsunto = await pool.query(
+                'INSERT INTO asuntos (nombre, sesion_id) VALUES ($1, $2) RETURNING id',
+                [asunto, sesion_id]
+            );
+            asunto_id = newAsunto.rows[0].id;
+        }
+
+        // 2️⃣ Insertar el voto en la tabla
+        await pool.query(
+            'INSERT INTO votos (diputado_id, asunto_id, voto, sesion_id) VALUES ($1, $2, $3, $4)',
+            [diputado_id, asunto_id, voto, sesion_id]
+        );
+
+        res.status(201).json({ message: 'Voto registrado exitosamente' });
     } catch (error) {
-        console.error(error);
-        res.status(500).send("Error al registrar el voto");
+        console.error('Error al registrar el voto:', error);
+        res.status(500).json({ error: 'Error al registrar el voto' });
     }
 });
+
 
 // 📌 Endpoint para obtener resultados de la votación
 app.get("/api/resultados", async (req, res) => {
