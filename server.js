@@ -115,4 +115,28 @@ app.post("/api/voto", async (req, res) => {
     }
 });
 
-// 📌 Endpoint p
+// 📌 Endpoint para obtener resultados de la votación
+app.get("/api/resultados", async (req, res) => {
+    try {
+        const result = await pool.query(`
+            SELECT d.nombre,
+                   SUM(CASE WHEN v.voto = 'a favor' THEN 1 ELSE 0 END) AS a_favor,
+                   SUM(CASE WHEN v.voto = 'en contra' THEN 1 ELSE 0 END) AS en_contra,
+                   SUM(CASE WHEN v.voto = 'abstenciones' THEN 1 ELSE 0 END) AS abstenciones,
+                   SUM(CASE WHEN v.voto = 'ausente' THEN 1 ELSE 0 END) AS ausente
+            FROM votos v
+            JOIN diputados d ON v.diputado_id = d.id
+            GROUP BY d.nombre
+        `);
+        res.json(result.rows);
+    } catch (error) {
+        console.error("Error al obtener resultados:", error);
+        res.status(500).json({ error: "Error al obtener resultados" });
+    }
+});
+
+//  Iniciamos el servidor
+app.listen(port, "0.0.0.0", () => {
+    console.log(`🔥 Servidor corriendo en el puerto ${port}`);
+});
+
