@@ -3,17 +3,23 @@ const { Pool } = require("pg");
 const cors = require("cors");
 
 const app = express();
-const port = process.env.PORT || 3000;  // ⚡ Importante: Usamos el puerto que Render asigne
+const port = process.env.PORT || 3000; // ⚡ Importante: Usamos el puerto que Render asigne
 
-// Middleware para permitir solicitudes desde otros dominios (como Netlify o Vercel)
-app.use(cors());
+// 🔥 Middleware de CORS configurado correctamente
+const corsOptions = {
+    origin: "https://prototipo-votacion-frontend.onrender.com", // Permitir solicitudes solo desde el frontend
+    methods: "GET,POST,PUT,DELETE",
+    allowedHeaders: "Content-Type,Authorization"
+};
+app.use(cors(corsOptions));
+
 app.use(express.json());
 
 // ⚡ Configuración de la conexión a PostgreSQL en Render
 const pool = new Pool({
-    connectionString: process.env.DATABASE_URL, // ⚡ Render asigna esta variable
+    connectionString: process.env.DATABASE_URL,
     ssl: {
-        rejectUnauthorized: false,  // ⚡ Importante para conexiones seguras en Render
+        rejectUnauthorized: false, // ⚡ Importante para conexiones seguras en Render
     },
 });
 
@@ -26,6 +32,9 @@ app.get("/", (req, res) => {
 app.get("/api/diputados", async (req, res) => {
     try {
         const result = await pool.query("SELECT * FROM diputados");
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: "No se encontraron diputados" });
+        }
         res.json(result.rows);
     } catch (error) {
         console.error("Error al obtener diputados:", error);
@@ -48,7 +57,7 @@ app.post("/api/sesion", async (req, res) => {
 
         res.status(201).json({ message: "Sesión creada correctamente", sesion_id: result.rows[0].id });
     } catch (error) {
-        console.error(error);
+        console.error("Error al registrar la sesión:", error);
         res.status(500).json({ error: "Error al registrar la sesión" });
     }
 });
@@ -65,29 +74,29 @@ app.get("/api/sesiones", async (req, res) => {
 });
 
 // 📌 Endpoint para registrar un voto
-app.post('/api/voto', async (req, res) => {
+app.post("/api/voto", async (req, res) => {
     try {
         const { diputado_id, voto, asunto, sesion_id } = req.body;
 
         if (!diputado_id || !voto || !asunto || !sesion_id) {
-            return res.status(400).json({ error: 'Datos incompletos' });
+            return res.status(400).json({ error: "Datos incompletos" });
         }
 
         // 1️⃣ Buscar si el asunto ya existe en la base de datos
         let asuntoQuery = await pool.query(
-            'SELECT id FROM asuntos WHERE nombre = $1 AND sesion_id = $2',
+            "SELECT id FROM asuntos WHERE nombre = $1 AND sesion_id = $2",
             [asunto, sesion_id]
         );
 
         let asunto_id;
-        
+
         if (asuntoQuery.rows.length > 0) {
             // Si el asunto ya existe, usar su id
             asunto_id = asuntoQuery.rows[0].id;
         } else {
             // Si no existe, crearlo y obtener su id
             const newAsunto = await pool.query(
-                'INSERT INTO asuntos (nombre, sesion_id) VALUES ($1, $2) RETURNING id',
+                "INSERT INTO asuntos (nombre, sesion_id) VALUES ($1, $2) RETURNING id",
                 [asunto, sesion_id]
             );
             asunto_id = newAsunto.rows[0].id;
@@ -95,41 +104,15 @@ app.post('/api/voto', async (req, res) => {
 
         // 2️⃣ Insertar el voto en la tabla
         await pool.query(
-            'INSERT INTO votos (diputado_id, asunto_id, voto, sesion_id) VALUES ($1, $2, $3, $4)',
+            "INSERT INTO votos (diputado_id, asunto_id, voto, sesion_id) VALUES ($1, $2, $3, $4)",
             [diputado_id, asunto_id, voto, sesion_id]
         );
 
-        res.status(201).json({ message: 'Voto registrado exitosamente' });
+        res.status(201).json({ message: "Voto registrado exitosamente" });
     } catch (error) {
-        console.error('Error al registrar el voto:', error);
-        res.status(500).json({ error: 'Error al registrar el voto' });
+        console.error("Error al registrar el voto:", error);
+        res.status(500).json({ error: "Error al registrar el voto" });
     }
 });
 
-
-// 📌 Endpoint para obtener resultados de la votación
-app.get("/api/resultados", async (req, res) => {
-    try {
-        const result = await pool.query(`
-            SELECT d.nombre,
-                   SUM(CASE WHEN v.voto = 'a favor' THEN 1 ELSE 0 END) AS a_favor,
-                   SUM(CASE WHEN v.voto = 'en contra' THEN 1 ELSE 0 END) AS en_contra,
-                   SUM(CASE WHEN v.voto = 'abstenciones' THEN 1 ELSE 0 END) AS abstenciones,
-                   SUM(CASE WHEN v.voto = 'ausente' THEN 1 ELSE 0 END) AS ausente
-            FROM votos v
-            JOIN diputados d ON v.diputado_id = d.id
-            GROUP BY d.nombre
-        `);
-        res.json(result.rows);
-    } catch (error) {
-        console.error(error);
-        res.status(500).send("Error al obtener resultados");
-    }
-});
-
-//  Iniciamos el servidor
-app.listen(port, "0.0.0.0", () => {
-    console.log(`Servidor corriendo en el puerto ${port}`);
-});
-
-
+// 📌 Endpoint p
